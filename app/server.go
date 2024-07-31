@@ -34,7 +34,7 @@ func main() {
 			continue
 		}
 		fmt.Println("Connection established!")
-		handleConnection(conn)
+		go handleConnection(conn)
 	}
 }
 
