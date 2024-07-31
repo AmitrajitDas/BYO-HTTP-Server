@@ -61,6 +61,16 @@ func handleConnection(conn net.Conn) {
 	case path == "/user-agent":
 		response = fmt.Sprintf("%s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", getStatus(200, "OK"), len(req.UserAgent), req.UserAgent)
 		fmt.Printf("User-Agent response: %s\n", req.UserAgent)
+	case strings.HasPrefix(path, "/files/"):
+		dir := os.Args[2]
+		fileName := strings.TrimPrefix(path, "/files/")
+		fmt.Print(fileName)
+		file, err := os.ReadFile(dir + fileName)
+		if err != nil {
+			response = getStatus(404, "Not Found") + "\r\n\r\n"
+		} else {
+			response = fmt.Sprintf("%s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", getStatus(200, "OK"), len(file), file)
+		}
 	case path == "/":
 		response = getStatus(200, "OK") + "\r\n\r\n"
 		fmt.Println("Root path response: 200 OK")
