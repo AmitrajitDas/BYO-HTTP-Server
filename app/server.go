@@ -24,9 +24,19 @@ func main() {
 
 	req := make([]byte, 1024)
 	conn.Read(req)
-	if !strings.HasPrefix(string(req), "GET / HTTP/1.1") {
+
+	splitHeader := strings.Split(string(req), "\r\n")
+	fmt.Println("splitHeader: ", splitHeader)
+	splitRequestLine := strings.Split(splitHeader[0], " ")
+	fmt.Println("splitRequestLine: ", splitRequestLine)
+
+	if splitRequestLine[1] == "/" {
+		conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
+	} else if strings.Split(splitRequestLine[1], "/")[1] == "echo" {
+		reqBody := strings.Split(splitRequestLine[1], "/")[2]
+		fmt.Println("reqBody: ", reqBody)
+		conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + fmt.Sprint(len(reqBody)) + "\r\n\r\n" + reqBody))
+	} else {
 		conn.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
-		return
 	}
-	conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\n"))
 }
