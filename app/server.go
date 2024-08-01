@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net"
@@ -54,17 +56,21 @@ func handleConnection(conn net.Conn) {
 
 	fmt.Printf("Received request: Method=%s, Path=%s, Headers=%v, UserAgent=%s, Body=%s\n", req.Method, req.Path, req.Headers, req.UserAgent, req.Body)
 
-	var response string
+	var body string
+	var responseHeaders string
+
 	switch path := req.Path; {
 	case strings.HasPrefix(path, "/echo/"):
 		content := strings.TrimPrefix(path, "/echo/")
-		response = fmt.Sprintf("%s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", getStatus(200, "OK"), len(content), content)
+		body = content
+		responseHeaders = fmt.Sprintf("%s\r\nContent-Type: text/plain", getStatus(200, "OK"))
 		fmt.Printf("Echo response: %s\n", content)
 	case path == "/user-agent":
-		response = fmt.Sprintf("%s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", getStatus(200, "OK"), len(req.UserAgent), req.UserAgent)
+		body = req.UserAgent
+		responseHeaders = fmt.Sprintf("%s\r\nContent-Type: text/plain", getStatus(200, "OK"))
 		fmt.Printf("User-Agent response: %s\n", req.UserAgent)
 	case strings.HasPrefix(path, "/files/"):
-		dir := os.Args[2]
+		dir := getDirectoryFromArgs()
 		fileName := strings.TrimPrefix(path, "/files/")
 		filePath := filepath.Join(dir, fileName)
 		fmt.Println("req.Method: ", req.Method)
@@ -72,42 +78,62 @@ func handleConnection(conn net.Conn) {
 		if req.Method == "GET" {
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-				response = getStatus(404, "Not Found") + "\r\n\r\n"
+				responseHeaders = getStatus(404, "Not Found") + "\r\n\r\n"
 				fmt.Printf("File not found: %s\n", filePath)
 			} else {
-				response = fmt.Sprintf("%s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", getStatus(200, "OK"), len(file), file)
+				body = string(file)
+				responseHeaders = fmt.Sprintf("%s\r\nContent-Type: application/octet-stream", getStatus(200, "OK"))
 				fmt.Printf("File served: %s\n", filePath)
 			}
 		} else if req.Method == "POST" {
 			contentLength, err := strconv.Atoi(req.Headers["Content-Length"])
 			if err != nil {
-				response = getStatus(400, "Bad Request") + "\r\n\r\n"
+				responseHeaders = getStatus(400, "Bad Request") + "\r\n\r\n"
 				break
 			}
 			body := []byte(req.Body)
 			if len(body) != contentLength {
-				response = getStatus(400, "Bad Request") + "\r\n\r\n"
+				responseHeaders = getStatus(400, "Bad Request") + "\r\n\r\n"
 				break
 			}
 			err = os.WriteFile(filePath, body, 0644)
 			if err != nil {
-				response = getStatus(500, "Internal Server Error") + "\r\n\r\n"
+				responseHeaders = getStatus(500, "Internal Server Error") + "\r\n\r\n"
 			} else {
-				response = getStatus(201, "Created") + "\r\n\r\n"
+				responseHeaders = getStatus(201, "Created") + "\r\n\r\n"
 				fmt.Printf("File created: %s\n", filePath)
 			}
 		} else {
-			response = getStatus(405, "Method Not Allowed") + "\r\n\r\n"
+			responseHeaders = getStatus(405, "Method Not Allowed") + "\r\n\r\n"
 		}
 	case path == "/":
-		response = getStatus(200, "OK") + "\r\n\r\n"
+		responseHeaders = getStatus(200, "OK") + "\r\n\r\n"
 		fmt.Println("Root path response: 200 OK")
 	default:
-		response = getStatus(404, "Not Found") + "\r\n\r\n"
+		responseHeaders = getStatus(404, "Not Found") + "\r\n\r\n"
 		fmt.Printf("Path not found: %s\n", path)
 	}
 
-	conn.Write([]byte(response))
+	// Handle gzip compression based on Accept-Encoding header
+	acceptEncoding := req.Headers["Accept-Encoding"]
+	if strings.Contains(acceptEncoding, "gzip") {
+		var compressedBody bytes.Buffer
+		gzipWriter := gzip.NewWriter(&compressedBody)
+		_, err := gzipWriter.Write([]byte(body))
+		if err != nil {
+			fmt.Println("Error compressing body:", err)
+			compressedBody.Reset()
+			compressedBody.WriteString(body)
+		}
+		gzipWriter.Close()
+		responseHeaders += fmt.Sprintf("\r\nContent-Encoding: gzip\r\nContent-Length: %d\r\n\r\n", compressedBody.Len())
+		conn.Write([]byte(responseHeaders))
+		conn.Write(compressedBody.Bytes())
+	} else {
+		responseHeaders += fmt.Sprintf("\r\nContent-Length: %d\r\n\r\n", len(body))
+		conn.Write([]byte(responseHeaders))
+		conn.Write([]byte(body))
+	}
 	fmt.Println("Response sent to client")
 }
 
@@ -166,4 +192,11 @@ func parseRequest(conn net.Conn) (*HTTPRequest, error) {
 
 func getStatus(statusCode int, statusText string) string {
 	return fmt.Sprintf("HTTP/1.1 %d %s", statusCode, statusText)
+}
+
+func getDirectoryFromArgs() string {
+	if len(os.Args) > 2 {
+		return os.Args[2]
+	}
+	return "." // Default directory
 }
