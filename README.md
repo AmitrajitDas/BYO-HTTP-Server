@@ -1,38 +1,96 @@
 [![progress-banner](https://backend.codecrafters.io/progress/http-server/6f27fabe-0738-464a-8665-9d7b62191a86)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
-This is a starting point for Go solutions to the
-["Build Your Own HTTP server" Challenge](https://app.codecrafters.io/courses/http-server/overview).
+# Simple Go HTTP Server
 
-[HTTP](https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol) is the
-protocol that powers the web. In this challenge, you'll build a HTTP/1.1 server
-that is capable of serving multiple clients.
+This is a basic HTTP server written in Go. It listens on a specified port and handles various HTTP requests, including serving files, echoing content, and returning the User-Agent string.
 
-Along the way you'll learn about TCP servers,
-[HTTP request syntax](https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html),
-and more.
+## Features
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+- **Echo Endpoint:** Returns the content appended to `/echo/` in the URL.
+- **User-Agent Endpoint:** Returns the User-Agent string from the request.
+- **File Serving:** Serves files from a specified directory. Supports `GET` and `POST` methods.
+- **Gzip Compression:** Supports gzip compression based on the `Accept-Encoding` header.
 
-# Passing the first stage
+## Usage
 
-The entry point for your HTTP server implementation is in `app/server.go`. Study
-and uncomment the relevant code, and push your changes to pass the first stage:
+### Starting the Server
+
+To start the server, run the following command:
 
 ```sh
-git add .
-git commit -m "pass 1st stage" # any msg
-git push origin master
+go run main.go [directory]
 ```
 
-Time to move on to the next stage!
+- **Directory (optional):** The directory from which to serve files. If not specified, the current directory will be used.
 
-# Stage 2 & beyond
+## Endpoints
+### Echo Endpoint
 
-Note: This section is for stages 2 and beyond.
+- **URL:** `/echo/{content}`
+- **Method:** `GET`
+- **Description:** Returns the `{content}` appended to the URL.
 
-1. Ensure you have `go (1.19)` installed locally
-1. Run `./your_program.sh` to run your program, which is implemented in
-   `app/server.go`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+### User-Agent Endpoint
+
+- **URL:** `/user-agent`
+- **Method:** `GET`
+- **Description:** Returns the User-Agent string from the request.
+
+### File Serving
+
+- **URL:** `/files/{filename}`
+- **Method:** 
+   - **GET:** Serves the specified file.
+   - **POST:** Saves the content in the request body to the specified file.
+- **Description:** Serves or saves files in the specified directory.
+
+## Example Requests
+### Echo Content:
+```sh
+curl http://localhost:4221/echo/hello
+```
+
+### Response:
+```sh
+hello
+```
+### Get User-Agent:
+```sh
+curl http://localhost:4221/user-agent
+```
+
+### Response:
+```sh
+curl/7.68.0
+```
+### Serve File:
+```sh
+curl http://localhost:4221/files/example.txt
+```
+
+### Save File:
+```sh
+curl -X POST -H "Content-Type: text/plain" -d "This is a test" http://localhost:4221/files/example.txt
+```
+
+## Implementation
+Here's a brief overview of the code structure:
+- **main.go:** The main entry point of the server.
+   - **main():** Starts the server and listens on the specified port.
+   - **handleConnection(conn net.Conn):** Handles incoming connections.
+   - **parseRequest(conn net.Conn):** Parses the HTTP request.
+   - **getStatus(statusCode int, statusText string):** Returns the HTTP status line.
+   - **getDirectoryFromArgs():** Returns the directory from which to serve files, defaulting to the current directory if not specified.
+
+## Error Handling
+- Returns 400 Bad Request for malformed requests.
+- Returns 404 Not Found for unknown paths or missing files.
+- Returns 405 Method Not Allowed for unsupported methods.
+- Returns 500 Internal Server Error for server-side errors during file operations.
+
+## Gzip Compression
+The server supports gzip compression if the `Accept-Encoding` header includes `gzip`. Compressed responses include the `Content-Encoding: gzip` header.
+
+## License
+This project is licensed under the MIT License.
+
