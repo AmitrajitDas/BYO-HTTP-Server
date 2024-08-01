@@ -13,6 +13,7 @@ import (
 	"strings"
 )
 
+// HTTPRequest struct holds the details of an HTTP request
 type HTTPRequest struct {
 	Method    string
 	Path      string
@@ -24,6 +25,7 @@ type HTTPRequest struct {
 func main() {
 	fmt.Println("Starting the server...")
 
+	// Start listening on port 4221
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
@@ -32,6 +34,7 @@ func main() {
 	defer l.Close()
 	fmt.Println("Server is listening on port 4221")
 
+	// Accept connections in a loop
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -39,14 +42,17 @@ func main() {
 			continue
 		}
 		fmt.Println("Connection established!")
+		// Handle each connection concurrently
 		go handleConnection(conn)
 	}
 }
 
+// handleConnection processes the incoming connection
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	fmt.Println("Handling new connection...")
 
+	// Parse the HTTP request
 	req, err := parseRequest(conn)
 	if err != nil {
 		fmt.Fprintf(conn, "HTTP/1.1 400 Bad Request\r\n\r\n%s", err.Error())
@@ -59,22 +65,27 @@ func handleConnection(conn net.Conn) {
 	var body string
 	var responseHeaders string
 
+	// Handle different paths
 	switch path := req.Path; {
 	case strings.HasPrefix(path, "/echo/"):
+		// Echo endpoint
 		content := strings.TrimPrefix(path, "/echo/")
 		body = content
 		responseHeaders = fmt.Sprintf("%s\r\nContent-Type: text/plain", getStatus(200, "OK"))
 		fmt.Printf("Echo response: %s\n", content)
 	case path == "/user-agent":
+		// User-Agent endpoint
 		body = req.UserAgent
 		responseHeaders = fmt.Sprintf("%s\r\nContent-Type: text/plain", getStatus(200, "OK"))
 		fmt.Printf("User-Agent response: %s\n", req.UserAgent)
 	case strings.HasPrefix(path, "/files/"):
+		// File handling endpoint
 		dir := getDirectoryFromArgs()
 		fileName := strings.TrimPrefix(path, "/files/")
 		filePath := filepath.Join(dir, fileName)
 		fmt.Println("req.Method: ", req.Method)
 		if req.Method == "GET" {
+			// Handle GET request for files
 			file, err := os.ReadFile(filePath)
 			if err != nil {
 				responseHeaders = getStatus(404, "Not Found") + "\r\n\r\n"
@@ -85,6 +96,7 @@ func handleConnection(conn net.Conn) {
 				fmt.Printf("File served: %s\n", filePath)
 			}
 		} else if req.Method == "POST" {
+			// Handle POST request for files
 			contentLength, err := strconv.Atoi(req.Headers["Content-Length"])
 			if err != nil {
 				responseHeaders = getStatus(400, "Bad Request") + "\r\n\r\n"
@@ -106,9 +118,11 @@ func handleConnection(conn net.Conn) {
 			responseHeaders = getStatus(405, "Method Not Allowed") + "\r\n\r\n"
 		}
 	case path == "/":
+		// Root path response
 		responseHeaders = getStatus(200, "OK") + "\r\n\r\n"
 		fmt.Println("Root path response: 200 OK")
 	default:
+		// Default response for unknown paths
 		responseHeaders = getStatus(404, "Not Found") + "\r\n\r\n"
 		fmt.Printf("Path not found: %s\n", path)
 	}
@@ -136,6 +150,7 @@ func handleConnection(conn net.Conn) {
 	fmt.Println("Response sent to client")
 }
 
+// parseRequest reads and parses the HTTP request from the connection
 func parseRequest(conn net.Conn) (*HTTPRequest, error) {
 	reader := bufio.NewReader(conn)
 	var req HTTPRequest
@@ -151,6 +166,7 @@ func parseRequest(conn net.Conn) (*HTTPRequest, error) {
 		fmt.Printf("Parsing line: %s\n", line)
 
 		if lineNum == 0 {
+			// Parse the request line
 			parts := strings.Split(line, " ")
 			if len(parts) < 2 {
 				return nil, fmt.Errorf("invalid request line")
@@ -158,6 +174,7 @@ func parseRequest(conn net.Conn) (*HTTPRequest, error) {
 			req.Method = parts[0]
 			req.Path = parts[1]
 		} else {
+			// Parse the headers
 			if line == "" {
 				break
 			}
@@ -173,6 +190,7 @@ func parseRequest(conn net.Conn) (*HTTPRequest, error) {
 		lineNum++
 	}
 
+	// Parse the body if it's a POST request
 	if req.Method == "POST" {
 		contentLength, err := strconv.Atoi(req.Headers["Content-Length"])
 		if err != nil {
@@ -189,10 +207,12 @@ func parseRequest(conn net.Conn) (*HTTPRequest, error) {
 	return &req, nil
 }
 
+// getStatus returns the HTTP status line based on the status code and text
 func getStatus(statusCode int, statusText string) string {
 	return fmt.Sprintf("HTTP/1.1 %d %s", statusCode, statusText)
 }
 
+// getDirectoryFromArgs returns the directory to serve files from the command line arguments or defaults to the current directory
 func getDirectoryFromArgs() string {
 	if len(os.Args) > 2 {
 		return os.Args[2]
