@@ -74,7 +74,6 @@ func handleConnection(conn net.Conn) {
 		fileName := strings.TrimPrefix(path, "/files/")
 		filePath := filepath.Join(dir, fileName)
 		fmt.Println("req.Method: ", req.Method)
-
 		if req.Method == "GET" {
 			file, err := os.ReadFile(filePath)
 			if err != nil {
